@@ -1,0 +1,57 @@
+name: Unit Tests
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        lisp-implementation: [sbcl, ccl, ecl]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Cache Lisp implementation
+      uses: actions/cache@v2
+      with:
+        path: ~/.cache/common-lisp
+        key: lisp-${{ matrix.lisp-implementation }}-image
+
+    - name: Install Lisp implementation
+      run: |
+        case ${{ matrix.lisp-implementation }} in
+          sbcl) sudo apt-get -y install sbcl ;;
+          ccl) sudo apt-get -y install ccl ;;
+          ecl) sudo apt-get -y install ecl ;;
+          *) echo "Invalid Lisp implementation: ${{ matrix.lisp-implementation }}" ;;
+        esac
+
+    - name: Cache Quicklisp setup
+      uses: actions/cache@v2
+      with:
+        path: ~/.quicklisp
+        key: quicklisp-setup
+
+    - name: Install Quicklisp
+      run: curl -L https://github.com/quicklisp/quicklisp-client/releases/download/2022-03-10/quicklisp.lisp -o /tmp/quicklisp.lisp && sbcl --noinform --no-userinit --no-sysinit --non-interactive --load /tmp/quicklisp.lisp --eval "(quicklisp-quickstart:install :path \"~/.quicklisp\")"
+
+    - name: Cache Quicklisp downloads
+      uses: actions/cache@v2
+      with:
+        path: ~/.quicklisp/dists
+        key: quicklisp-downloads
+
+    - name: Install doxygen-lisp-filter
+      run: |
+        export PATH=~/.quicklisp/bin:$PATH
+        sbcl --load ~/.quicklisp/setup.lisp --eval '(ql:quickload :doxygen-lisp-filter)'
+
+    - name: Run unit tests
+      run: |
+        export PATH=~/.quicklisp/bin:$PATH
+        sbcl --load ~/.quicklisp/setup.lisp --eval '(ql:quickload :doxygen-lisp-filter-test)' --eval '(run!)'
